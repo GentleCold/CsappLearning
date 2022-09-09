@@ -8,7 +8,7 @@
 * csapp.txt - 由本人 E-note 项目生成的笔记
 
 各 lab 得分
-* Datalab - 62 / 62
+* Data Lab - 62 / 62
   * 项目目录下运行 ```./labs/data_lab/driver.pl -u GentleCold```
 
 注：
