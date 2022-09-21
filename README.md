@@ -10,6 +10,7 @@
 各 lab 得分
 * Data Lab - 62 / 62
   * 项目目录下运行 ```./labs/data_lab/driver.pl -u GentleCold```
+* Bomb Lab - 答案见 bomb_lab/answer
 
 注：
 * 本人运行环境: WINDOWS10 - WSL2

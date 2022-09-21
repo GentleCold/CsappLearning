@@ -6,6 +6,7 @@
 
 
 void test_all() {
+    EXPECT_EQ_TRUE(-1 > 0x80); // compare as int
 }
 
 int main() {

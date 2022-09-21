@@ -351,6 +351,7 @@ unsigned floatPower2(int x) {
     if (x >= 0x80) return 0x7F800000; // nan
 
     if (x < 0) {
+        if (x == 0x80000000) return 0;
         x = ~x + 1;
         if (x >= 0x7F) return 0;
         e -= x;
