@@ -10,6 +10,7 @@ set(EXECUTABLE_OUTPUT_PATH ${BUILD_PATH}) # EXE
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${BUILD_PATH}) # LIB
 
 add_executable(TestQuiz quiz/test_quiz.c)
+add_executable(Mountain quiz/storage_mountain/mountain.c quiz/storage_mountain/clock.c quiz/storage_mountain/fcyc2.c)
 
 if(CMAKE_BUILD_TYPE AND (CMAKE_BUILD_TYPE STREQUAL "Debug"))
     add_definitions(-DDEBUG)
