@@ -146,7 +146,7 @@ void mm_free(void *ptr) {
 
 /**
  * implemented simply in terms of mm_malloc and mm_free
- * if size <= old_size, then cut instead of malloc and coalesce
+ * if size <= old_size, then return
  * if the rest blank are enough for the size, then coalesce
  * if too big, then cut again
  */
@@ -155,31 +155,31 @@ void *mm_realloc(void *ptr, size_t size) {
     if (size == 0) return NULL;
 
     void *new_ptr;
-    size_t old_size = SIZE(ptr);
     size_t adjust_size = ALIGN(size);
+    size_t old_size = SIZE(ptr);
     if (adjust_size <= old_size) {
-        if (old_size - adjust_size >= FSIZE) {
-            _place(ptr, adjust_size); // just cut
-            if (NEXT(ptr) != tail_p && !ALLOC(NEXT(NEXT(ptr)))) __coalesce_next(NEXT(ptr));
-        }
+        // just return, for the memory lost is little
         return ptr;
-    } else {
-        if (ptr != tail_p && !ALLOC(NEXT(ptr)) && SIZE(ptr) + SIZE(NEXT(ptr)) + DSIZE >= adjust_size) {
-            if (NEXT(ptr) == tail_p) tail_p = ptr;
-            size_t new_size = SIZE(ptr) + SIZE(NEXT(ptr)) + DSIZE;
-            SET(HEAD(ptr), PACK(new_size, 1));
-            SET(FOOT(ptr), PACK(new_size, 1));
-            if (SIZE(ptr) - adjust_size >= FSIZE) {
-                _place(ptr, adjust_size);
-            }
-            return ptr;
-        }
-
-        if ((new_ptr = mm_malloc(size)) == NULL) return NULL;
-        memcpy(new_ptr, ptr, old_size);
-        mm_free(ptr);
+    }
+    size_t next_size = (ptr != tail_p && !ALLOC(NEXT(ptr))) ? SIZE(NEXT(ptr)) + DSIZE : 0;
+    size_t total_size = old_size + next_size;
+    if (adjust_size <= total_size) {
+        new_ptr = __coalesce_next(ptr);
+        _place(new_ptr, adjust_size); // just cut
         return new_ptr;
     }
+    size_t prev_size = (ptr != front_p && !ALLOC(PREV(ptr))) ? SIZE(PREV(ptr)) + DSIZE : 0;
+    total_size += prev_size;
+    if (adjust_size <= total_size) { // coalesce prev or all
+        new_ptr = _coalesce(ptr);
+        memmove(new_ptr, ptr, old_size);
+        _place(new_ptr, adjust_size);
+    } else {
+        if ((new_ptr = mm_malloc(size)) == NULL) return NULL;
+        memmove(new_ptr, ptr, old_size);
+        mm_free(ptr);
+    }
+    return new_ptr;
 }
 
 // my func
