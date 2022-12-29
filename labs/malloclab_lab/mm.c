@@ -68,6 +68,8 @@ typedef char byte;
 // mark the front and tail pos
 void *front_p = NULL;
 void *tail_p = NULL;
+// used for next fit, updated by mm_init, mm_malloc, _coalesce
+void *fitted_p = NULL;
 
 // My func
 /**
@@ -90,10 +92,26 @@ static void *__coalesce_all(void *bp);
 
 /**
  * traverse and find first fit, then place in
+ * @deprecated too slow
  * @param size align by 8, excluding head and foot
  * @return
  */
 static void *_first_fit(size_t size);
+
+/**
+ * find next fit, then place in
+ * @param size align by 8, excluding head and foot
+ * @return
+ */
+static void *_next_fit(size_t size);
+
+/**
+ * find next fit, then place in, if from beginning, use best fit
+ * @deprecated thru loss
+ * @param size align by 8, excluding head and foot
+ * @return
+ */
+static void *_next_best_fit(size_t size);
 
 /**
  * allocate the block and cut sometimes
@@ -109,6 +127,7 @@ static void _place(void *ptr, size_t size);
 int mm_init(void) {
     if ((front_p = mem_sbrk(WSIZE)) == (void *) - 1) return -1; // blank
     front_p += DSIZE; // first chunk
+    fitted_p = front_p; // init fitted_p
     if (!_extend(CHUNK)) return -1;
     return 0;
 }
@@ -120,7 +139,8 @@ void *mm_malloc(size_t size) {
     size_t adjust_size = ALIGN(size);
     size_t extend_size;
     void *bp;
-    if ((bp = _first_fit(adjust_size)) != NULL) {
+    if ((bp = _next_fit(adjust_size)) != NULL) {
+        fitted_p = bp;
         return bp;
     } else {
         extend_size = adjust_size;
@@ -130,6 +150,7 @@ void *mm_malloc(size_t size) {
         bp = _extend(MAX(extend_size, CHUNK));
         if (bp == NULL) return bp;
         _place(bp, adjust_size);
+        fitted_p = bp;
         return bp;
     }
 }
@@ -146,9 +167,7 @@ void mm_free(void *ptr) {
 
 /**
  * implemented simply in terms of mm_malloc and mm_free
- * if size <= old_size, then return
- * if the rest blank are enough for the size, then coalesce
- * if too big, then cut again
+ * compare adjust_size and total_size step by step
  */
 void *mm_realloc(void *ptr, size_t size) {
     if (ptr == NULL) return mm_malloc(size);
@@ -164,9 +183,9 @@ void *mm_realloc(void *ptr, size_t size) {
     size_t next_size = (ptr != tail_p && !ALLOC(NEXT(ptr))) ? SIZE(NEXT(ptr)) + DSIZE : 0;
     size_t total_size = old_size + next_size;
     if (adjust_size <= total_size) {
-        new_ptr = __coalesce_next(ptr);
-        _place(new_ptr, adjust_size); // just cut
-        return new_ptr;
+        __coalesce_next(ptr);
+        _place(ptr, adjust_size); // just cut
+        return ptr;
     }
     size_t prev_size = (ptr != front_p && !ALLOC(PREV(ptr))) ? SIZE(PREV(ptr)) + DSIZE : 0;
     total_size += prev_size;
@@ -214,6 +233,7 @@ static void *__coalesce_prev(void *bp) {
     SET(HEAD(prev), PACK(new_size, 0));
     SET(FOOT(bp), PACK(new_size, 0));
     if (bp == tail_p) tail_p = prev;
+    if (bp == fitted_p) fitted_p = prev;
     return prev;
 }
 
@@ -223,6 +243,7 @@ static void *__coalesce_next(void *bp) {
     SET(HEAD(bp), PACK(new_size, 0));
     SET(FOOT(next), PACK(new_size, 0));
     if (next == tail_p) tail_p = bp; // should also change
+    if (next == fitted_p) fitted_p = bp;
     return bp;
 }
 
@@ -233,6 +254,7 @@ static void *__coalesce_all(void *bp) {
     SET(HEAD(prev), PACK(new_size, 0));
     SET(FOOT(next), PACK(new_size, 0));
     if (next == tail_p) tail_p = prev;
+    if (next == fitted_p || bp == fitted_p) fitted_p = prev;
     return prev;
 }
 
@@ -247,6 +269,54 @@ static void *_first_fit(size_t size) {
         bp = NEXT(bp);
     }
     return NULL;
+}
+
+static void *_next_fit(size_t size) {
+    void *bp = fitted_p;
+    void *after_p = NEXT(tail_p);
+    while (bp != after_p) {
+        if (!ALLOC(bp) && SIZE(bp) >= size) {
+            _place(bp, size);
+            return bp;
+        }
+        bp = NEXT(bp);
+    }
+    bp = front_p;
+    while (bp != fitted_p) {
+        if (!ALLOC(bp) && SIZE(bp) >= size) {
+            _place(bp, size);
+            return bp;
+        }
+        bp = NEXT(bp);
+    }
+    return NULL;
+}
+
+static void *_next_best_fit(size_t size) {
+    void *bp = fitted_p;
+    void *after_p = NEXT(tail_p);
+    while (bp != after_p) {
+        if (!ALLOC(bp) && SIZE(bp) >= size) {
+            _place(bp, size);
+            return bp;
+        }
+        bp = NEXT(bp);
+    }
+    bp = front_p;
+    size_t min = 0;
+    void *min_p = NULL;
+    while (bp != fitted_p) {
+        if (!ALLOC(bp) && SIZE(bp) >= size) {
+            if (min_p == NULL || SIZE(bp) < min) {
+                min = SIZE(bp);
+                min_p = bp;
+            }
+        }
+        bp = NEXT(bp);
+    }
+    if (min_p == NULL) return NULL;
+    _place(min_p, size);
+    return min_p;
 }
 
 static void _place(void *ptr, size_t size) {
